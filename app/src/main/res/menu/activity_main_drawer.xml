@@ -14,6 +14,10 @@
             android:id="@+id/nav_recent_media"
             android:icon="@drawable/ic_menu_slideshow"
             android:title="Recent Media" />
+        <item
+            android:id="@+id/kill_server"
+            android:icon="@drawable/ic_close_light"
+            android:title="Stop Server" />
         <!--<item-->
             <!--android:id="@+id/nav_manage"-->
             <!--android:icon="@drawable/ic_menu_manage"-->
