@@ -3,6 +3,7 @@ package com.example.u1.localvideocaster;
 import android.Manifest;
 import android.app.FragmentManager;
 import android.app.FragmentTransaction;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -14,123 +15,125 @@ import android.net.Uri;
 import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Environment;
+import android.os.Handler;
 import android.provider.MediaStore;
 import android.provider.OpenableColumns;
+import android.support.design.widget.FloatingActionButton;
+import android.support.design.widget.NavigationView;
+import android.support.design.widget.Snackbar;
 import android.support.v4.app.FragmentActivity;
 import android.support.v4.content.CursorLoader;
-import android.support.v7.app.AlertDialog;
-import android.support.v7.app.MediaRouteButton;
-import android.util.Log;
-import android.view.View;
-import android.support.design.widget.NavigationView;
 import android.support.v4.view.GravityCompat;
 import android.support.v4.widget.DrawerLayout;
+import android.support.v7.app.ActionBarActivity;
 import android.support.v7.app.ActionBarDrawerToggle;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
+import android.support.v7.app.MediaRouteButton;
 import android.support.v7.widget.Toolbar;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.View;
 import android.widget.ImageButton;
-import android.widget.ImageView;
 import android.widget.Toast;
-import android.graphics.Bitmap;
+
+import com.google.android.gms.cast.MediaInfo;
+import com.google.android.gms.cast.MediaMetadata;
+import com.google.android.gms.cast.framework.CastButtonFactory;
+import com.google.android.gms.cast.framework.CastContext;
+import com.google.android.gms.cast.framework.CastSession;
+import com.google.android.gms.cast.framework.CastState;
+import com.google.android.gms.cast.framework.CastStateListener;
+import com.google.android.gms.cast.framework.IntroductoryOverlay;
+import com.google.android.gms.cast.framework.SessionManagerListener;
+import com.google.android.gms.cast.framework.media.RemoteMediaClient;
+import com.google.android.gms.common.images.WebImage;
+
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import android.util.Patterns;
+public class MainActivity extends AppCompatActivity
+implements NavigationView.OnNavigationItemSelectedListener {
 
-import android.support.v4.view.MenuItemCompat;
-import android.support.v7.app.MediaRouteActionProvider;
-import android.support.v7.media.MediaRouteSelector;
-import android.support.v7.media.MediaRouter;
-import android.support.v7.media.MediaRouter.RouteInfo;
 
-import com.google.android.gms.cast.ApplicationMetadata;
-import com.google.android.gms.cast.Cast;
-import com.google.android.gms.cast.CastDevice;
-import com.google.android.gms.cast.CastMediaControlIntent;
-import com.google.android.gms.cast.MediaInfo;
-import com.google.android.gms.cast.MediaMetadata;
-import com.google.android.gms.cast.MediaStatus;
-import com.google.android.gms.cast.RemoteMediaPlayer;
-import com.google.android.gms.cast.framework.CastButtonFactory;
-import com.google.android.gms.cast.framework.CastContext;
-import com.google.android.gms.cast.framework.CastSession;
-import com.google.android.gms.cast.framework.Session;
-import com.google.android.gms.cast.framework.SessionManager;
-import com.google.android.gms.cast.framework.SessionManagerListener;
-import com.google.android.gms.common.ConnectionResult;
-import com.google.android.gms.common.api.GoogleApiClient;
-import com.google.android.gms.common.api.ResultCallback;
-import com.google.android.gms.common.api.Status;
-import com.google.android.gms.common.images.WebImage;
-
-public class MainActivity extends FragmentActivity
-        implements NavigationView.OnNavigationItemSelectedListener {
-
-    private CastSession mCastSession;
-    private SessionManager mSessionManager;
-    private final SessionManagerListener mSessionManagerListener =
-            new SessionManagerListenerImpl();
     String fileName;
     private static final int REQUEST_TAKE_GALLERY_VIDEO = 1;
     final private int REQUEST_CODE_ASK_MULTIPLE_PERMISSIONS = 29;
 //    ImageView imageView;
-    ImageButton videoControlButton;
-    ImageButton startCasting;
+//    ImageButton videoControlButton;
+
     String selectedImagePath;
     File file;
     LocalServer localServer;
     Uri selectedImageUri;
     Bitmap ThumbImage;
 
+    File temp;
+
     ThumbFragment fr;
     boolean iscasting;
-    private MediaRouter mMediaRouter;
-    private MediaRouteSelector mMediaRouteSelector;
-    private MediaRouter.Callback mMediaRouterCallback;
-    private CastDevice mSelectedDevice;
-    private GoogleApiClient mApiClient;
-    private RemoteMediaPlayer mRemoteMediaPlayer;
-    private Cast.Listener mCastClientListener;
-    private boolean mWaitingForReconnect = false;
-    private boolean mApplicationStarted = false;
-    private boolean mVideoIsLoaded;
-    private boolean mIsPlaying;
     MediaMetadataRetriever retriever;
+    CastContext mCastContext;
+    private MediaRouteButton mMediaRouteButton;
+    private CastStateListener mCastStateListener;
+    private CastSession mCastSession;
+    private SessionManagerListener<CastSession> mSessionManagerListener;
+    private PlaybackLocation mLocation;
+    private PlaybackState mPlaybackState;
+    private static final String thumb = "image-480x270"; // "thumb";
+    private static final String img = "image-780x1200";
+    String ip;
 
+    public enum PlaybackState {
+        PLAYING, PAUSED, BUFFERING, IDLE
+    }
+
+    public enum PlaybackLocation {
+        LOCAL,
+        REMOTE
+    }
+
+    private IntroductoryOverlay mIntroductoryOverlay;
 
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        mSessionManager = CastContext.getSharedInstance(this).getSessionManager();
         super.onCreate(savedInstanceState);
+
         setContentView(R.layout.activity_main);
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
-        MediaRouteButton mMediaRouteButton = (MediaRouteButton) findViewById(R.id.media_route_button);
+        setSupportActionBar(toolbar);
+        addFAB();
+
+
+        mMediaRouteButton = (MediaRouteButton) findViewById(R.id.media_route_button);
         CastButtonFactory.setUpMediaRouteButton(getApplicationContext(), mMediaRouteButton);
 
-        videoControlButton = (ImageButton) findViewById(R.id.videoControlButton);
+        mCastContext = CastContext.getSharedInstance(this);
+        mCastContext.registerLifecycleCallbacksBeforeIceCreamSandwich(this, savedInstanceState);
 
-        videoControlButton.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) {
-                // Perform action on click
-                if( !mVideoIsLoaded ){
-                    startVideo();
-                    Log.v("cast", "start video");
-                } else{
-                    controlVideo();
-                }
 
-            }
-        });
+
+//        videoControlButton = (ImageButton) findViewById(R.id.videoControlButton);
+//        videoControlButton.setOnClickListener(new View.OnClickListener() {
+//            public void onClick(View v) {
+//                // Perform action on click
+////                loadRemoteMedia(0,true);
+////                play(0);
+//
+//            }
+//        });
 
         retriever = new MediaMetadataRetriever();
+
         DrawerLayout drawer = (DrawerLayout) findViewById(R.id.drawer_layout);
         ActionBarDrawerToggle toggle = new ActionBarDrawerToggle(
                 this, drawer, toolbar, R.string.navigation_drawer_open, R.string.navigation_drawer_close);
@@ -139,41 +142,90 @@ public class MainActivity extends FragmentActivity
 
         NavigationView navigationView = (NavigationView) findViewById(R.id.nav_view);
         navigationView.setNavigationItemSelectedListener(this);
+
+
         requestPermission();
+        WifiManager wm = (WifiManager) getSystemService(WIFI_SERVICE);
+         ip = android.text.format.Formatter.formatIpAddress(wm.getConnectionInfo().getIpAddress());
 
 //        cast
-        initMediaRouter();
 
+        setupCastListener();
+        mCastContext = CastContext.getSharedInstance(this);
+        mCastContext.registerLifecycleCallbacksBeforeIceCreamSandwich(this, savedInstanceState);
+        mCastSession = mCastContext.getSessionManager().getCurrentCastSession();
+
+        mCastStateListener = new CastStateListener() {
+            @Override
+            public void onCastStateChanged(int newState) {
+                if (newState != CastState.NO_DEVICES_AVAILABLE) {
+                    showIntroductoryOverlay();
+                }
+            }
+        };
+        mCastContext = CastContext.getSharedInstance(this);
+
+        if (mCastSession != null && mCastSession.isConnected()) {
+            Log.d("mLocation","Remote");
+            Log.d("mPlaybackState","idle");
+        } else {
+            Log.d("mLocation","local");
+        }
+        mPlaybackState = PlaybackState.IDLE;
+
+    }
+
+    private void addFAB(){
+        FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab);
+        fab.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                Intent intent = new Intent(Intent.ACTION_PICK, MediaStore.Video.Media.EXTERNAL_CONTENT_URI);
+
+                startActivityForResult(Intent.createChooser(intent,
+                        "Select Picture"), REQUEST_TAKE_GALLERY_VIDEO);
+//                Snackbar.make(view, "Replace with your own action", Snackbar.LENGTH_LONG)
+//                        .setAction("Action", null).show();
+            }
+        });
     }
 
     @Override
     protected void onResume() {
-        mCastSession = mSessionManager.getCurrentCastSession();
-        mSessionManager.addSessionManagerListener(mSessionManagerListener);
+        Log.d("method onResume", "On Resume Called");
+        mCastContext.addCastStateListener(mCastStateListener);
+        mCastContext.getSessionManager().addSessionManagerListener(
+                mSessionManagerListener, CastSession.class);
+        if (mCastSession != null && mCastSession.isConnected()) {
+            Log.d("method onResume status","remote");
+            if(selectedImagePath != null && fr != null){
+                fr.updateViewCasting(selectedImagePath);
+            }
+        } else {
+            Log.d("method onResume status","local");
+            if(selectedImagePath != null && fr != null){
+                fr.updateViewNotCasting(selectedImagePath);
+            }
+        }
         super.onResume();
 
-        mMediaRouter.addCallback( mMediaRouteSelector, mMediaRouterCallback, MediaRouter.CALLBACK_FLAG_PERFORM_ACTIVE_SCAN );
-
-        Log.v("file", String.valueOf(file));
-        Log.v("resume", "On Resume Called");
     }
 
 
 
     @Override
     protected void onPause() {
-        Log.v("pause", "On Pause Called");
+        Log.d("method onPause", "On Pause Called");
+        mCastContext.removeCastStateListener(mCastStateListener);
 //        if(localServer != null) {
 //            localServer.stop();
 //        }
+        //ReAdded
+        mCastContext.getSessionManager().removeSessionManagerListener(
+                mSessionManagerListener, CastSession.class);
 
-        if ( isFinishing() ) {
-            // End media router discovery
-            mMediaRouter.removeCallback( mMediaRouterCallback );
-        }
         super.onPause();
-        mSessionManager.removeSessionManagerListener(mSessionManagerListener);
-        mCastSession = null;
+
     }
 
     @Override
@@ -181,7 +233,7 @@ public class MainActivity extends FragmentActivity
         if(localServer != null){
             localServer.stop();
         }
-        teardown();
+        
         super.onDestroy();
     }
 
@@ -199,11 +251,6 @@ public class MainActivity extends FragmentActivity
     public boolean onCreateOptionsMenu(Menu menu) {
         // Inflate the menu; this adds items to the action bar if it is present.
         getMenuInflater().inflate(R.menu.main, menu);
-
-//        cast
-//        MenuItem mediaRouteMenuItem = menu.findItem( R.id.media_route_menu_item );
-//        MediaRouteActionProvider mediaRouteActionProvider = (MediaRouteActionProvider) MenuItemCompat.getActionProvider( mediaRouteMenuItem );
-//        mediaRouteActionProvider.setRouteSelector( mMediaRouteSelector );
         return true;
     }
 
@@ -213,11 +260,6 @@ public class MainActivity extends FragmentActivity
         // automatically handle clicks on the Home/Up button, so long
         // as you specify a parent activity in AndroidManifest.xml.
         int id = item.getItemId();
-
-        //noinspection SimplifiableIfStatement
-//        if (id == R.id.action_settings) {
-//            return true;
-//        }
 
         return super.onOptionsItemSelected(item);
     }
@@ -234,23 +276,13 @@ public class MainActivity extends FragmentActivity
             startActivityForResult(Intent.createChooser(intent,
                     "Select Picture"), REQUEST_TAKE_GALLERY_VIDEO);
 
-        } else if (id == R.id.nav_recent_media) {
-
-         }else if(id == R.id.kill_server){
+        }else if(id == R.id.kill_server){
              if(localServer != null){
                  localServer.stop();
-                 Log.v("Server", "Server stoped");
+                 Log.i("Server", "Server stoped");
              }
 
          }
-
-//        } else if (id == R.id.nav_manage) {
-//
-//        } else if (id == R.id.nav_share) {
-//
-//        } else if (id == R.id.nav_send) {
-//
-//        }
 
         DrawerLayout drawer = (DrawerLayout) findViewById(R.id.drawer_layout);
         drawer.closeDrawer(GravityCompat.START);
@@ -263,19 +295,15 @@ public class MainActivity extends FragmentActivity
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
 
         if (resultCode == RESULT_OK) {
-//            if(localServer != null){
-//                localServer.stop();
-//                Log.v("local","server not null");
-//            }
+
 
             WifiManager wm = (WifiManager) getSystemService(WIFI_SERVICE);
             String ip = android.text.format.Formatter.formatIpAddress(wm.getConnectionInfo().getIpAddress());
-            Log.v("ip", ip);
+            Log.i("ip", ip);
             if (requestCode == REQUEST_TAKE_GALLERY_VIDEO) {
-                mVideoIsLoaded = false;
+
                 if(localServer != null){
                     localServer.stop();
-                    Log.v("local","server not null");
                 }
                     try {
                         localServer = new LocalServer();
@@ -285,53 +313,50 @@ public class MainActivity extends FragmentActivity
 
 
                 selectedImageUri = data.getData();
-
-                // OI FILE Manager
-//                String filemanagerstring = selectedImageUri.getPath();
-
-                // MEDIA GALLERY
-                // selectedImagePath = getPath(selectedImageUri);
-//                Log.v("path",""+selectedImageUri);
-//                Log.v("path",""+filemanagerstring);
-//                Log.v("path",""+getRealPathFromURI(selectedImageUri));
                 selectedImagePath = getRealPathFromURI(selectedImageUri);
                 if (selectedImagePath != null) {
-                    Log.v("vis", String.valueOf(videoControlButton.getVisibility()));
-                    if(videoControlButton.getVisibility() == View.INVISIBLE){
-                        videoControlButton.setVisibility(View.VISIBLE);
-                        videoControlButton.setClickable(true);
-                    }
+//                    if(videoControlButton.getVisibility() == View.INVISIBLE){
+//                        videoControlButton.setVisibility(View.VISIBLE);
+//                        videoControlButton.setClickable(true);
+//                    }
                     file = new File(getRealPathFromURI(selectedImageUri));
-                    ThumbImage = ThumbnailUtils.createVideoThumbnail(getRealPathFromURI(selectedImageUri), MediaStore.Video.Thumbnails.MICRO_KIND);
+                    ThumbImage = ThumbnailUtils.createVideoThumbnail(getRealPathFromURI(selectedImageUri), MediaStore.Video.Thumbnails.MINI_KIND);
 //                    imageView.setImageBitmap(ThumbImage);
-                    localServer.setFile(file);
-                    videoControlButton.setImageResource(R.drawable.ic_media_play);
+                    if(ThumbImage != null){
+                        temp =  makeFile(ThumbImage);
+                        if(localServer!=null){
+                            localServer.setVideoFile(file);
+                            localServer.setImageFile(makeFile(Bitmap.createScaledBitmap(ThumbImage, 780, 1200, true)));
+                        }
+                    }
+
+//                    localServer.setVideoFile(file);
+//                    videoControlButton.setImageResource(R.drawable.ic_media_play);
 
                     Bundle bundle = new Bundle();
                     bundle.putString("ThumbNailPath", getRealPathFromURI(selectedImageUri));
                     bundle.putString("Title", fileName);
                     bundle.putBoolean("isCasting",iscasting);
-                    Log.v("new", "new fragment");
+                    Log.i("method onActivityResult", "new fragment created");
                     fr = new ThumbFragment();
                     fr.setArguments(bundle);
                     FragmentManager fm = getFragmentManager();
                     FragmentTransaction fragmentTransaction = fm.beginTransaction();
                     fragmentTransaction.replace(R.id.fooFragment,fr);
                     fragmentTransaction.commit();
+                    boolean isConnected = (mCastSession != null)
+                            && (mCastSession.isConnected() || mCastSession.isConnecting());
+                    Log.i("method onActivityResult","is connected to cast device" + String.valueOf(isConnected));
+                    if(isConnected){
+                        loadRemoteMedia(0,true);
+                    }
 
-//                    try {
-////                        file = new File(Environment.getExternalStorageDirectory() + "/DCIM/Camera/20160905_235301.mp4");
-//                        localServer = new LocalServer();
-//                        localServer.setFile(file);
-//                        localServer.start();
-//                    } catch (IOException e) {
-//                        e.printStackTrace();
-//                    }
 
                 }
             }
         }
     }
+
 
     private String getRealPathFromURI(Uri contentUri) {
         String[] proj = { MediaStore.Images.Media.DATA };
@@ -346,6 +371,37 @@ public class MainActivity extends FragmentActivity
         fileName = returnCursor.getString(nameIndex);
         cursor.close();
         return result;
+    }
+
+    public File makeFile(Bitmap bitmap){
+        //create a videoFile to write bitmap data
+        File f = new File(getCacheDir(),"name" );
+        try {
+            f.createNewFile();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        //Convert bitmap to byte array
+
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        bitmap.compress(Bitmap.CompressFormat.PNG, 0 /*ignored for PNG*/, bos);
+        byte[] bitmapdata = bos.toByteArray();
+
+        //write the bytes in videoFile
+        FileOutputStream fos = null;
+        try {
+            fos = new FileOutputStream(f);
+            fos.write(bitmapdata);
+            fos.flush();
+            fos.close();
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        return f;
     }
 
 
@@ -384,8 +440,6 @@ public class MainActivity extends FragmentActivity
             }
             return;
         }
-//        itemname = GetFiles(Environment.getExternalStorageDirectory() + "/DCIM/Camera");
-//        new MyTask(this).execute(itemname);
     }
 
     @Override
@@ -407,10 +461,9 @@ public class MainActivity extends FragmentActivity
                         && perms.get(Manifest.permission.ACCESS_WIFI_STATE) == PackageManager.PERMISSION_GRANTED
                         && perms.get(Manifest.permission.INTERNET) == PackageManager.PERMISSION_GRANTED
                         && perms.get(Manifest.permission.ACCESS_NETWORK_STATE) == PackageManager.PERMISSION_GRANTED) {
-                    // All Permissions Granted
-//                    itemname = GetFiles(Environment.getExternalStorageDirectory() + "/DCIM/Camera");
-//                    new MyTask(this).execute(itemname);
-//
+                    // All Permissions Granted do anything that must have permission and can be done before user allows
+
+
                 } else {
                     // Permission Denied
                     Toast.makeText(MainActivity.this, "Some Permission is Denied", Toast.LENGTH_SHORT)
@@ -448,287 +501,172 @@ public class MainActivity extends FragmentActivity
 
 //    cast
 
+    private void loadRemoteMedia(int position, boolean autoPlay) {
+        if (mCastSession == null) {
+            return;
+        }
+        final RemoteMediaClient remoteMediaClient = mCastSession.getRemoteMediaClient();
+        if (remoteMediaClient == null) {
+            return;
+        }
+        remoteMediaClient.addListener(new RemoteMediaClient.Listener() {
+            @Override
+            public void onStatusUpdated() {
+                Intent intent = new Intent(MainActivity.this, ExpandedControlsActivity.class);
+                startActivity(intent);
+                remoteMediaClient.removeListener(this);
+            }
 
-    private void initMediaRouter() {
-        // Configure Cast device discovery
-        mMediaRouter = MediaRouter.getInstance( getApplicationContext() );
-        mMediaRouteSelector = new MediaRouteSelector.Builder()
-                .addControlCategory( CastMediaControlIntent.categoryForCast( CastMediaControlIntent.DEFAULT_MEDIA_RECEIVER_APPLICATION_ID ) )
-                .build();
-        mMediaRouterCallback = new MediaRouterCallback();
+            @Override
+            public void onMetadataUpdated() {
+            }
+
+            @Override
+            public void onQueueStatusUpdated() {
+            }
+
+            @Override
+            public void onPreloadStatusUpdated() {
+            }
+
+            @Override
+            public void onSendingRemoteMediaRequest() {
+            }
+        });
+        remoteMediaClient.load(buildMediaInfo(), autoPlay, position);
     }
 
-    private void initCastClientListener() {
-        mCastClientListener = new Cast.Listener() {
+
+
+    private MediaInfo buildMediaInfo() {
+        retriever.setDataSource(selectedImagePath);
+        MediaMetadata movieMetadata = new MediaMetadata(MediaMetadata.MEDIA_TYPE_MOVIE);
+        movieMetadata.putString(MediaMetadata.KEY_TITLE, fileName);
+        movieMetadata.addImage(new WebImage(Uri.parse("http://" + ip +":8080/image")));
+
+        String time = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION);
+        String videoURL = "http://" + ip +":8080/video";
+        long timeInmillisec = Long.parseLong( time );
+        Log.i("duration","video duration" +  String.valueOf(timeInmillisec));
+
+        return new  MediaInfo.Builder( videoURL )
+                .setContentType( "video/mp4" )
+                .setStreamType( MediaInfo.STREAM_TYPE_BUFFERED )
+                .setMetadata( movieMetadata )
+                .build();
+    }
+
+    private void showIntroductoryOverlay() {
+        if (mIntroductoryOverlay != null) {
+            mIntroductoryOverlay.remove();
+        }
+        if ((mMediaRouteButton != null) && mMediaRouteButton.getVisibility() == View.VISIBLE) {
+            new Handler().post(new Runnable() {
+                @Override
+                public void run() {
+                    mIntroductoryOverlay = new IntroductoryOverlay.Builder(
+                            MainActivity.this, mMediaRouteButton)
+                            .setTitleText("Touch to cast media to your TV")
+                            .setSingleTime()
+                            .setOnOverlayDismissedListener(
+                                    new IntroductoryOverlay.OnOverlayDismissedListener() {
+                                        @Override
+                                        public void onOverlayDismissed() {
+                                            mIntroductoryOverlay = null;
+                                        }
+                                    })
+                            .build();
+                    mIntroductoryOverlay.show();
+                }
+            });
+        }
+    }
+
+    private void play(int position) {
+        mPlaybackState = PlaybackState.BUFFERING;
+        mCastSession.getRemoteMediaClient().seek(position);
+    }
+
+    private void setupCastListener() {
+        mSessionManagerListener = new SessionManagerListener<CastSession>() {
+
             @Override
-            public void onApplicationStatusChanged() {
+            public void onSessionEnded(CastSession session, int error) {
+                Log.i("cast","cast dissonnected onSessionEnded");
+                onApplicationDisconnected();
             }
 
             @Override
-            public void onVolumeChanged() {
+            public void onSessionResumed(CastSession session, boolean wasSuspended) {
+                onApplicationConnected(session);
             }
 
             @Override
-            public void onApplicationDisconnected( int statusCode ) {
-                teardown();
+            public void onSessionResumeFailed(CastSession session, int error) {
+                onApplicationDisconnected();
+            }
+
+            @Override
+            public void onSessionStarted(CastSession session, String sessionId) {
+                Log.i("cast","cast started onSessionStarted");
+                onApplicationConnected(session);
+            }
+
+            @Override
+            public void onSessionStartFailed(CastSession session, int error) {
+                onApplicationDisconnected();
+            }
+
+            @Override
+            public void onSessionStarting(CastSession session) {}
+
+            @Override
+            public void onSessionEnding(CastSession session) {}
+
+            @Override
+            public void onSessionResuming(CastSession session, String sessionId) {}
+
+            @Override
+            public void onSessionSuspended(CastSession session, int reason) {}
+
+            private void onApplicationConnected(CastSession castSession) {
+                mCastSession = castSession;
+                Log.i("cast","cast connected onApplicationConnected");
+                if(selectedImagePath != null && fr != null){
+                    fr.updateViewCasting(selectedImagePath);
+                }
+                if (null != fileName) {
+                    if (mPlaybackState == PlaybackState.PLAYING) {
+                        Log.d("onApplicationConnected ","mPlaybackState Playing");
+//                        mVideoView.pause();
+//                        loadRemoteMedia(mSeekbar.getProgress(), true);
+                        finish();
+                        return;
+                    } else {
+                        mPlaybackState = PlaybackState.IDLE;
+                        Log.d("onApplicationConnected","mPlaybackState idle");
+//                        updatePlaybackLocation(PlaybackLocation.REMOTE);
+                    }
+                }
+//                updatePlayButton(mPlaybackState);
+                invalidateOptionsMenu();
+            }
+
+            private void onApplicationDisconnected() {
+                Log.i("cast","cast dissonnected onApplicationDisconnected");
+                Log.d("ApplicationDisconnected","mLocation  local");
+                Log.d("ApplicationDisconnected","mPlaybackState idle");
+//              updatePlaybackLocation(PlaybackLocation.LOCAL);
+                mPlaybackState = PlaybackState.IDLE;
+                mLocation = PlaybackLocation.LOCAL;
+                if(selectedImagePath != null && fr != null){
+                    fr.updateViewNotCasting(selectedImagePath);
+                }
+                invalidateOptionsMenu();
             }
         };
     }
 
-    private void initRemoteMediaPlayer() {
-        mRemoteMediaPlayer = new RemoteMediaPlayer();
-        mRemoteMediaPlayer.setOnStatusUpdatedListener( new RemoteMediaPlayer.OnStatusUpdatedListener() {
-            @Override
-            public void onStatusUpdated() {
-                MediaStatus mediaStatus = mRemoteMediaPlayer.getMediaStatus();
-                mIsPlaying = mediaStatus.getPlayerState() == MediaStatus.PLAYER_STATE_PLAYING;
-            }
-        });
-
-        mRemoteMediaPlayer.setOnMetadataUpdatedListener( new RemoteMediaPlayer.OnMetadataUpdatedListener() {
-            @Override
-            public void onMetadataUpdated() {
-            }
-        });
-    }
-
-    private void controlVideo() {
-        if( mRemoteMediaPlayer == null || !mVideoIsLoaded )
-            return;
-
-        if( mIsPlaying ) {
-            mRemoteMediaPlayer.pause( mApiClient );
-            videoControlButton.setImageResource(R.drawable.ic_media_play);
-        } else {
-            mRemoteMediaPlayer.play( mApiClient );
-            videoControlButton.setImageResource(R.drawable.ic_media_pause);
-        }
-    }
-
-    private void startVideo()
-    {
-
-        MediaMetadata mediaMetadata = new MediaMetadata( MediaMetadata.MEDIA_TYPE_MOVIE );
-        retriever.setDataSource(selectedImagePath);
-        mediaMetadata.putString(MediaMetadata.KEY_TITLE, fileName);
-        Uri path = Uri.parse("android.resource://" + getPackageName() + "/" + + R.drawable.cast_ic_notification_play);
-        mediaMetadata.addImage(new WebImage(path));
-//        mediaMetadata.addImage(new WebImage(Uri.parse(bigImageUrl)));
-//        mediaMetadata.putString( MediaMetadata.KEY_TITLE, getString( R.string.video_title ) );
-        WifiManager wm = (WifiManager) getSystemService(WIFI_SERVICE);
-        String ip = android.text.format.Formatter.formatIpAddress(wm.getConnectionInfo().getIpAddress());
-        Log.v("ip", ip);
-        String videoURL = "http://" + ip +":8080";
-        Log.v("isValid", String.valueOf(Patterns.WEB_URL.matcher(videoURL).matches()));
-
-        MediaInfo mediaInfo = new MediaInfo.Builder( videoURL )
-                .setContentType( "video/mp4" )
-                .setStreamType( MediaInfo.STREAM_TYPE_BUFFERED )
-                .setMetadata( mediaMetadata )
-                .build();
-
-        Toast.makeText(getApplicationContext(), "Video build " + videoURL, Toast.LENGTH_LONG).show();
-
-        try
-        {
-            mRemoteMediaPlayer.load( mApiClient, mediaInfo, true )
-                    .setResultCallback( new ResultCallback<RemoteMediaPlayer.MediaChannelResult>()
-                    {
-                        @Override
-                        public void onResult( RemoteMediaPlayer.MediaChannelResult mediaChannelResult )
-                        {
-                            try {
-                                if( mediaChannelResult.getStatus().isSuccess() )
-                                {
-                                    mVideoIsLoaded = true;
-                                    videoControlButton.setImageResource(R.drawable.ic_media_pause);
-
-                                    Toast.makeText(getApplicationContext(), "Media loaded successfully", Toast.LENGTH_LONG).show();
-                                }
-                            } catch (Exception e) {
-                                e.printStackTrace();
-                                Log.v("error", "error" + e);
-                            }
-                        }
-                    } );
-        }
-        catch (IllegalStateException e)
-        {
-            Log.v("error", "error" + e);
-            Toast.makeText(getApplicationContext(), "Problem occurred with media during loading : " + e, Toast.LENGTH_LONG).show();
-        }
-        catch (Exception e)
-        {
-            Log.v("error", "error" + e);
-            Toast.makeText(getApplicationContext(), "Problem occurred with media during loading : " + e, Toast.LENGTH_LONG).show();
-        }
-    }
-
-    private class MediaRouterCallback extends MediaRouter.Callback {
-
-        @Override
-        public void onRouteSelected(MediaRouter router, RouteInfo info) {
-            initCastClientListener();
-            initRemoteMediaPlayer();
-
-            mSelectedDevice = CastDevice.getFromBundle( info.getExtras() );
-
-            launchReceiver();
-        }
-
-        @Override
-        public void onRouteUnselected( MediaRouter router, RouteInfo info ) {
-            teardown();
-            mSelectedDevice = null;
-            videoControlButton.setImageResource(R.drawable.ic_media_play);
-            mVideoIsLoaded = false;
-        }
-    }
-
-    private void launchReceiver() {
-        Cast.CastOptions.Builder apiOptionsBuilder = Cast.CastOptions
-                .builder( mSelectedDevice, mCastClientListener );
-
-        ConnectionCallbacks mConnectionCallbacks = new ConnectionCallbacks();
-        ConnectionFailedListener mConnectionFailedListener = new ConnectionFailedListener();
-        mApiClient = new GoogleApiClient.Builder( this )
-                .addApi( Cast.API, apiOptionsBuilder.build() )
-                .addConnectionCallbacks( mConnectionCallbacks )
-                .addOnConnectionFailedListener( mConnectionFailedListener )
-                .build();
-
-        mApiClient.connect();
-    }
-
-    private class ConnectionCallbacks implements GoogleApiClient.ConnectionCallbacks {
-
-        @Override
-        public void onConnected( Bundle hint ) {
-            if( mWaitingForReconnect ) {
-                mWaitingForReconnect = false;
-                reconnectChannels( hint );
-            } else {
-                try {
-                    Cast.CastApi.launchApplication( mApiClient, CastMediaControlIntent.DEFAULT_MEDIA_RECEIVER_APPLICATION_ID, false )
-                            .setResultCallback( new ResultCallback<Cast.ApplicationConnectionResult>() {
-                                                    @Override
-                                                    public void onResult(Cast.ApplicationConnectionResult applicationConnectionResult) {
-                                                        Status status = applicationConnectionResult.getStatus();
-                                                        if( status.isSuccess() ) {
-                                                            //Values that can be useful for storing/logic
-                                                            ApplicationMetadata applicationMetadata = applicationConnectionResult.getApplicationMetadata();
-                                                            String sessionId = applicationConnectionResult.getSessionId();
-                                                            String applicationStatus = applicationConnectionResult.getApplicationStatus();
-                                                            boolean wasLaunched = applicationConnectionResult.getWasLaunched();
-
-                                                            mApplicationStarted = true;
-                                                            reconnectChannels( null );
-                                                        }
-                                                    }
-                                                }
-                            );
-                } catch ( Exception e ) {
-
-                }
-            }
-        }
-
-        @Override
-        public void onConnectionSuspended(int i) {
-            mWaitingForReconnect = true;
-        }
-    }
-
-    private void reconnectChannels( Bundle hint ) {
-        if( ( hint != null ) && hint.getBoolean( Cast.EXTRA_APP_NO_LONGER_RUNNING ) ) {
-            //Log.e( TAG, "App is no longer running" );
-            teardown();
-        } else {
-            try {
-                Cast.CastApi.setMessageReceivedCallbacks( mApiClient, mRemoteMediaPlayer.getNamespace(), mRemoteMediaPlayer );
-            } catch( IOException e ) {
-                //Log.e( TAG, "Exception while creating media channel ", e );
-            } catch( NullPointerException e ) {
-                //Log.e( TAG, "Something wasn't reinitialized for reconnectChannels" );
-            }
-        }
-    }
-
-    private class ConnectionFailedListener implements GoogleApiClient.OnConnectionFailedListener {
-        @Override
-        public void onConnectionFailed( ConnectionResult connectionResult ) {
-            teardown();
-        }
-    }
-
-    private void teardown() {
-        if( mApiClient != null ) {
-            if( mApplicationStarted ) {
-                try {
-                    Cast.CastApi.stopApplication( mApiClient );
-                    if( mRemoteMediaPlayer != null ) {
-                        Cast.CastApi.removeMessageReceivedCallbacks( mApiClient, mRemoteMediaPlayer.getNamespace() );
-                        mRemoteMediaPlayer = null;
-                    }
-                } catch( IOException e ) {
-                    //Log.e( TAG, "Exception while removing application " + e );
-                }
-                mApplicationStarted = false;
-            }
-            if( mApiClient.isConnected() )
-                mApiClient.disconnect();
-            mApiClient = null;
-        }
-        mSelectedDevice = null;
-        mVideoIsLoaded = false;
-    }
-
-
-    private class SessionManagerListenerImpl implements SessionManagerListener {
-
-        @Override
-        public void onSessionStarted(Session session, String sessionId) {
-            Log.v("session","start");
-            if(fr != null){
-                fr.setCasting(true);
-            }
-            iscasting = true;
-            invalidateOptionsMenu();
-        }
-
-        @Override
-        public void onSessionResumed(Session session, boolean wasSuspended) {
-            Log.v("session","resume");
-            invalidateOptionsMenu();
-        }
-
-        @Override
-        public void onSessionEnded(Session session, int error) {
-            Log.v("session","end");
-            if(fr != null){
-                fr.setCasting(false);
-            }
-            iscasting = false;
-            if(localServer != null) {
-                localServer.stop();
-                Log.v(" server ", "stop server");
-            }
-//            finish();
-        }
-
-        @Override
-        public void onSessionResuming(Session session, String s) {}
-        @Override
-        public void onSessionStarting(Session session) {}
-        @Override
-        public void onSessionStartFailed(Session session, int i) {}
-        @Override
-        public void onSessionEnding(Session session) {}
-        @Override
-        public void onSessionResumeFailed(Session session, int i) {}
-        @Override
-        public void onSessionSuspended(Session session, int i) {}
-    }
 
 
 

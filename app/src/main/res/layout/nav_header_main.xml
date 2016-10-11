@@ -16,20 +16,20 @@
         <!--android:layout_width="wrap_content"-->
         <!--android:layout_height="wrap_content"-->
         <!--android:paddingTop="@dimen/nav_header_vertical_spacing"-->
-        <!--android:src="@android:drawable/sym_def_app_icon" />-->
+        <!--android:src="@mipmap/ic_launcher" />-->
 
-    <!--<TextView-->
-        <!--android:layout_width="match_parent"-->
-        <!--android:layout_height="wrap_content"-->
-        <!--android:paddingTop="@dimen/nav_header_vertical_spacing"-->
-        <!--android:text="Local Media Caster"-->
-        <!--android:textAppearance="@style/TextAppearance.AppCompat.Body1" />-->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingTop="@dimen/nav_header_vertical_spacing"
+        android:text="@string/app_name"
+        android:textAppearance="@style/TextAppearance.AppCompat.Body1" />
 
     <TextView
         android:id="@+id/textView"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Local Media Caster"
+        android:text="Cast Your Home video's"
         android:editable="false"
         android:forceHasOverlappingRendering="false"
         android:textSize="20dp" />

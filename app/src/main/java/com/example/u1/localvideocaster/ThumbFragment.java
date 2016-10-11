@@ -7,6 +7,8 @@ import android.media.ThumbnailUtils;
 import android.net.wifi.WifiManager;
 import android.os.Bundle;
 import android.provider.MediaStore;
+import android.text.Html;
+import android.text.method.LinkMovementMethod;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -42,7 +44,6 @@ public class ThumbFragment extends Fragment {
                              Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.thumb_nail_fragment,
                 container, false);
-        Log.v("new","23");
         bundle = this.getArguments();
         return view;
     }
@@ -50,9 +51,6 @@ public class ThumbFragment extends Fragment {
     @Override
     public void onActivityCreated(Bundle savedInstanceState) {
         super.onActivityCreated(savedInstanceState);
-//        Bundle bundle = this.getArguments();
-
-
         imageView = (ImageView) getView().findViewById(R.id.videoThumbFragment);
         videoView = (VideoView) getView().findViewById(R.id.videoView1);
         descriptionTextView = (TextView) getView().findViewById(R.id.descriptionTextView);
@@ -70,17 +68,19 @@ public class ThumbFragment extends Fragment {
     }
 
     public void updateViewCasting(String path){
+        Log.i("view status","hide video");
         videoView.setVisibility(View.INVISIBLE);
         imageView.setVisibility(View.VISIBLE);
+        descriptionTextView.setVisibility(View.VISIBLE);
         ThumbImage = ThumbnailUtils.createVideoThumbnail(path, MediaStore.Video.Thumbnails.MINI_KIND);
         imageView.setImageBitmap(ThumbImage);
-        Log.v("casting","Y");
     }
 
-    public void updateViewNotCasting(){
+    public void updateViewNotCasting(String path){
+        Log.i("view status","show video");
         videoView.setVisibility(View.VISIBLE);
         imageView.setVisibility(View.INVISIBLE);
-        Log.v("bundle", String.valueOf(bundle));
+        descriptionTextView.setVisibility(View.INVISIBLE);
         mediaController = new MediaController(getActivity());
         videoView.setVideoPath(path);
     }
@@ -90,23 +90,17 @@ public class ThumbFragment extends Fragment {
         String ip = android.text.format.Formatter.formatIpAddress(wm.getConnectionInfo().getIpAddress());
         path = (String) bundle.get("ThumbNailPath");
         isCasting = (boolean) bundle.get("isCasting");
-        descriptionTextView.setText("Your LocalServer " + ip + ":8080");
+//        String text = "<a href='http:"+ip+":/8080/video'> Google </a>";
+//        descriptionTextView.setClickable(true);
+//        descriptionTextView.setMovementMethod(LinkMovementMethod.getInstance());
+//        descriptionTextView.setText( Html.fromHtml(text));
+        descriptionTextView.setText( "Your Server is running on: http:"+ip+":/8080/video" );
 //        isCasting = isCasting();
         if(isCasting){
-//            videoView.setVisibility(View.INVISIBLE);
-//            imageView.setVisibility(View.VISIBLE);
-//            ThumbImage = ThumbnailUtils.createVideoThumbnail(path, MediaStore.Video.Thumbnails.MINI_KIND);
-//            imageView.setImageBitmap(ThumbImage);
-//            Log.v("casting","Y");
             updateViewCasting(path);
 
         }else{
-//            videoView.setVisibility(View.VISIBLE);
-//            imageView.setVisibility(View.INVISIBLE);
-//            Log.v("bundle", String.valueOf(bundle));
-//            mediaController = new MediaController(getActivity());
-//            videoView.setVideoPath(path);
-            updateViewNotCasting();
+            updateViewNotCasting(path);
 
             videoView.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
                 @Override
@@ -120,15 +114,10 @@ public class ThumbFragment extends Fragment {
                     mediaController.setAnchorView(videoView);
                     videoView.seekTo(0);
 
-                    mediaController.show(60*1000);
+                    mediaController.show(3*1000);
 
                 }
             });
-
-
-
-
-            Log.v("casting","N");
         }
     }
 
